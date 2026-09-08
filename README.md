@@ -12,6 +12,8 @@ Product 1 final submission package, prepared through 30/08/2026.
 - `FINAL_REPORT.md`: editable final report.
 - `DEMO_SCRIPT.md`: presentation/video demonstration script.
 - `PRESENTATION_OUTLINE.md`: presentation-ready slide outline.
+- `quantum_circuit_product_1_demo.mp4`: generated demonstration video.
+- `generate_demo_video.py`: reproducible video generator.
 - `test_simulator.py`: automated tests.
 
 ## Installation

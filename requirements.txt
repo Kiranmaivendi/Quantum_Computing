@@ -5,3 +5,5 @@ matplotlib
 plotly
 numpy
 jupyter
+imageio
+imageio-ffmpeg
