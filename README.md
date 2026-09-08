@@ -11,7 +11,8 @@ Product 1 final submission package, prepared through 30/08/2026.
 - `Quantum_Circuit_Product_1.ipynb`: editable Jupyter Notebook with theory, circuits, results, and comparisons.
 - `FINAL_REPORT.md`: editable final report.
 - `DEMO_SCRIPT.md`: presentation/video demonstration script.
-- `../test.py`: automated tests.
+- `PRESENTATION_OUTLINE.md`: presentation-ready slide outline.
+- `test_simulator.py`: automated tests.
 
 ## Installation
 
@@ -33,10 +34,10 @@ The interface displays circuit diagrams, ideal statevectors, seeded measurement 
 
 ## Run tests
 
-From the `QC` workspace root:
+From this project directory:
 
 ```powershell
-python -m unittest -v test
+python -m unittest -v test_simulator
 ```
 
 ## Run the notebook

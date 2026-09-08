@@ -108,4 +108,279 @@ Product 1 delivers a functional and testable foundation for learning and demonst
 
 ## Appendix A: Complete Source Code
 
-The complete editable source is provided in `app.py`, `circuits.py`, `simulator.py`, `visualization.py`, and `../test.py`. The notebook contains executable examples for the full circuit catalog.
+The following source is included in the repository and reproduced here for a complete editable appendix.
+
+### A.1 `circuits.py`
+
+```python
+"""Constructors for the fundamental circuits used by Product 1."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from qiskit import QuantumCircuit
+
+
+def _single_qubit(name: str, operation: Callable[[QuantumCircuit, int], None]) -> QuantumCircuit:
+	circuit = QuantumCircuit(1, name=name)
+	operation(circuit, 0)
+	return circuit
+
+
+def identity() -> QuantumCircuit:
+	return _single_qubit("Identity", lambda circuit, qubit: circuit.id(qubit))
+
+
+def pauli_x() -> QuantumCircuit:
+	return _single_qubit("Pauli-X", lambda circuit, qubit: circuit.x(qubit))
+
+
+def pauli_y() -> QuantumCircuit:
+	return _single_qubit("Pauli-Y", lambda circuit, qubit: circuit.y(qubit))
+
+
+def pauli_z() -> QuantumCircuit:
+	return _single_qubit("Pauli-Z", lambda circuit, qubit: circuit.z(qubit))
+
+
+def hadamard() -> QuantumCircuit:
+	return _single_qubit("Hadamard", lambda circuit, qubit: circuit.h(qubit))
+
+
+def phase_s() -> QuantumCircuit:
+	return _single_qubit("Phase-S", lambda circuit, qubit: circuit.s(qubit))
+
+
+def phase_t() -> QuantumCircuit:
+	return _single_qubit("Phase-T", lambda circuit, qubit: circuit.t(qubit))
+
+
+def rotation(axis: str, theta: float) -> QuantumCircuit:
+	circuit = QuantumCircuit(1, name=f"Rotation-{axis.upper()}")
+	getattr(circuit, f"r{axis.lower()}")(theta, 0)
+	return circuit
+
+
+def measurement() -> QuantumCircuit:
+	circuit = QuantumCircuit(1, 1, name="Measurement")
+	circuit.measure(0, 0)
+	return circuit
+
+
+def cnot() -> QuantumCircuit:
+	circuit = QuantumCircuit(2, name="CNOT")
+	circuit.cx(0, 1)
+	return circuit
+
+
+def controlled_z() -> QuantumCircuit:
+	circuit = QuantumCircuit(2, name="CZ")
+	circuit.cz(0, 1)
+	return circuit
+
+
+def swap() -> QuantumCircuit:
+	circuit = QuantumCircuit(2, name="SWAP")
+	circuit.swap(0, 1)
+	return circuit
+
+
+def toffoli() -> QuantumCircuit:
+	circuit = QuantumCircuit(3, name="Toffoli")
+	circuit.ccx(0, 1, 2)
+	return circuit
+
+
+def bell_state() -> QuantumCircuit:
+	circuit = QuantumCircuit(2, name="Bell-State")
+	circuit.h(0)
+	circuit.cx(0, 1)
+	return circuit
+
+
+def ghz_state() -> QuantumCircuit:
+	circuit = QuantumCircuit(3, name="GHZ-State")
+	circuit.h(0)
+	circuit.cx(0, 1)
+	circuit.cx(1, 2)
+	return circuit
+
+
+def catalog() -> dict[str, Callable[[], QuantumCircuit]]:
+	return {
+		"Identity (I)": identity,
+		"Pauli-X": pauli_x,
+		"Pauli-Y": pauli_y,
+		"Pauli-Z": pauli_z,
+		"Hadamard (H)": hadamard,
+		"Phase-S": phase_s,
+		"Phase-T": phase_t,
+		"CNOT (CX)": cnot,
+		"Controlled-Z (CZ)": controlled_z,
+		"SWAP": swap,
+		"Toffoli (CCX)": toffoli,
+		"Bell state": bell_state,
+		"GHZ state": ghz_state,
+		"Measurement": measurement,
+	}
+```
+
+### A.2 `simulator.py`
+
+```python
+"""Simulation helpers shared by the application, notebook, and tests."""
+
+from __future__ import annotations
+
+from qiskit import ClassicalRegister, QuantumCircuit, transpile
+from qiskit.quantum_info import Statevector
+from qiskit_aer import AerSimulator
+
+
+def statevector(circuit: QuantumCircuit) -> Statevector:
+	"""Return the ideal statevector before measurement operations."""
+	instruction_circuit = circuit.remove_final_measurements(inplace=False)
+	return Statevector.from_instruction(instruction_circuit)
+
+
+def measure(circuit: QuantumCircuit, shots: int = 1024, seed: int = 42) -> dict[str, int]:
+	"""Run a circuit with measurements and return deterministic seeded counts."""
+	measured_circuit = circuit.copy()
+	if measured_circuit.num_clbits == 0:
+		measured_circuit.add_register(ClassicalRegister(measured_circuit.num_qubits))
+	if not measured_circuit.count_ops().get("measure"):
+		measured_circuit.measure(range(measured_circuit.num_qubits), range(measured_circuit.num_qubits))
+	simulator = AerSimulator(seed_simulator=seed)
+	compiled = transpile(measured_circuit, simulator)
+	return simulator.run(compiled, shots=shots, seed_simulator=seed).result().get_counts()
+
+
+def simulate(circuit: QuantumCircuit, shots: int = 1024, seed: int = 42):
+	"""Run a circuit and return the Aer result object for advanced use."""
+	sim = AerSimulator()
+	job = sim.run(circuit, shots=shots, seed_simulator=seed)
+	return job.result()
+
+
+def transpilation_summary(circuit: QuantumCircuit, basis_gates: list[str] | None = None) -> dict[str, object]:
+	"""Summarize how Qiskit lowers a circuit for the Aer backend."""
+	simulator = AerSimulator()
+	compiled = transpile(circuit, simulator, basis_gates=basis_gates)
+	return {
+		"original_depth": circuit.depth(),
+		"transpiled_depth": compiled.depth(),
+		"original_size": circuit.size(),
+		"transpiled_size": compiled.size(),
+		"transpiled_operations": dict(compiled.count_ops()),
+	}
+```
+
+### A.3 `visualization.py`
+
+```python
+"""Plotting helpers for circuit results."""
+
+from qiskit.visualization import plot_bloch_multivector, plot_histogram
+
+
+def histogram(counts):
+	return plot_histogram(counts)
+
+
+def bloch(state):
+	return plot_bloch_multivector(state)
+```
+
+### A.4 `app.py`
+
+```python
+import streamlit as st
+
+from circuits import catalog, rotation
+from simulator import measure, statevector, transpilation_summary
+from visualization import bloch, histogram
+
+st.set_page_config(page_title="Quantum Circuit Designer", page_icon="⚛️", layout="wide")
+st.title("Quantum Circuit Designer and Simulator")
+st.caption("Product 1 | Ideal Qiskit simulation of fundamental quantum circuits")
+
+catalogue = catalog()
+example = st.selectbox("Circuit example", list(catalogue) + ["Rotation"])
+shots = st.slider("Measurement shots", 128, 4096, 1024, step=128)
+
+if example == "Rotation":
+	axis = st.selectbox("Rotation axis", ["x", "y", "z"])
+	theta = st.slider("Angle (radians)", 0.0, 6.2832, 1.5708)
+	qc = rotation(axis, theta)
+else:
+	qc = catalogue[example]()
+
+st.subheader("Circuit diagram")
+st.code(qc.draw(output="text"), language="text")
+
+ideal_state = statevector(qc)
+counts = measure(qc, shots=shots)
+summary = transpilation_summary(qc)
+
+left, middle, right = st.columns(3)
+with left:
+	st.subheader("Statevector")
+	st.write(ideal_state)
+with middle:
+	st.subheader("Measurement counts")
+	st.write(counts)
+	st.pyplot(histogram(counts), clear_figure=False)
+with right:
+	st.subheader("Transpilation")
+	st.json(summary)
+
+st.subheader("Bloch representation")
+st.pyplot(bloch(ideal_state), clear_figure=False)
+```
+
+### A.5 `test_simulator.py`
+
+```python
+import unittest
+
+from circuits import bell_state, catalog, ghz_state, hadamard, pauli_x, rotation
+from simulator import measure, statevector, transpilation_summary
+
+
+class TestCircuitSimulator(unittest.TestCase):
+	def test_catalog_contains_all_required_examples(self):
+		self.assertEqual(len(catalog()), 14)
+
+	def test_x_flips_zero_to_one(self):
+		self.assertAlmostEqual(abs(statevector(pauli_x()).data[1]), 1.0)
+
+	def test_hadamard_is_superposition(self):
+		amplitudes = statevector(hadamard()).probabilities()
+		self.assertAlmostEqual(amplitudes[0], 0.5)
+		self.assertAlmostEqual(amplitudes[1], 0.5)
+
+	def test_bell_counts_are_correlated(self):
+		counts = measure(bell_state(), shots=256)
+		self.assertEqual(set(counts), {"00", "11"})
+
+	def test_ghz_has_three_qubits(self):
+		self.assertEqual(ghz_state().num_qubits, 3)
+
+	def test_rotation_and_transpilation(self):
+		summary = transpilation_summary(rotation("y", 1.0))
+		self.assertGreaterEqual(summary["transpiled_depth"], 1)
+
+
+if __name__ == "__main__":
+	unittest.main()
+```
+
+### A.6 Automated test evidence
+
+The final test run completed with six passing tests:
+
+```text
+Ran 6 tests in 0.4s
+OK
+```
