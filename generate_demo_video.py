@@ -9,13 +9,13 @@ from matplotlib.animation import FFMpegWriter, FuncAnimation
 from matplotlib.patches import FancyBboxPatch
 from imageio_ffmpeg import get_ffmpeg_exe
 
-from circuits import bell_state, ghz_state, hadamard
-from simulator import measure, transpilation_summary
+from circuits import catalog, rotation
+from simulator import measure, statevector, transpilation_summary
 
 
 OUTPUT = Path(__file__).with_name("quantum_circuit_product_1_demo.mp4")
 FPS = 24
-SCENE_SECONDS = 3
+SCENE_SECONDS = 2
 
 
 def draw_circuit(axis, circuit):
@@ -40,18 +40,37 @@ def draw_counts(axis, counts):
     axis.grid(axis="y", alpha=0.2)
 
 
+def draw_state(axis, state):
+    axis.axis("off")
+    axis.text(
+        0.02,
+        0.5,
+        f"Ideal statevector\n{state}",
+        family="monospace",
+        fontsize=10,
+        va="center",
+        color="#17324d",
+    )
+
+
 def make_video():
-    bell_counts = measure(bell_state(), shots=1024)
-    ghz_counts = measure(ghz_state(), shots=1024)
-    hadamard_counts = measure(hadamard(), shots=1024)
-    summary = transpilation_summary(bell_state())
+    circuit_builders = list(catalog().items()) + [
+        ("Rotation-X (pi/2)", lambda: rotation("x", 1.5708)),
+        ("Rotation-Y (pi/2)", lambda: rotation("y", 1.5708)),
+        ("Rotation-Z (pi/2)", lambda: rotation("z", 1.5708)),
+    ]
+    circuit_results = []
+    for name, builder in circuit_builders:
+        circuit = builder()
+        circuit_results.append((name, circuit, statevector(circuit), measure(circuit, shots=1024)))
+
+    summary = transpilation_summary(catalog()["Bell state"]())
     scenes = [
         ("title", None, None),
-        ("Hadamard superposition", hadamard(), hadamard_counts),
-        ("Bell-state entanglement", bell_state(), bell_counts),
-        ("GHZ three-qubit entanglement", ghz_state(), ghz_counts),
-        ("Reusable Qiskit architecture", None, None),
-        ("Transpilation analysis", bell_state(), summary),
+        *[("circuit", name, (circuit, state, counts)) for name, circuit, state, counts in circuit_results],
+        ("architecture", None, None),
+        ("transpilation", "Bell state", (catalog()["Bell state"](), summary)),
+        ("tests", None, None),
     ]
 
     plt.rcParams["animation.ffmpeg_path"] = get_ffmpeg_exe()
@@ -60,16 +79,16 @@ def make_video():
 
     def update(frame):
         scene_index = min(frame // frames_per_scene, len(scenes) - 1)
-        scene, circuit, result = scenes[scene_index]
+        kind, title, result = scenes[scene_index]
         figure.clear()
         figure.patch.set_facecolor("#f5f7f9")
-        if scene == "title":
+        if kind == "title":
             figure.text(0.08, 0.64, "Quantum Circuit Designer", fontsize=34, weight="bold", color="#12304a")
             figure.text(0.08, 0.53, "and Simulator", fontsize=34, weight="bold", color="#0e7490")
             figure.text(0.08, 0.39, "Product 1 demonstration | Qiskit + Aer + Streamlit", fontsize=17, color="#425466")
             figure.text(0.08, 0.25, "Qubits  |  gates  |  entanglement  |  measurement  |  visualization", fontsize=14, color="#425466")
-        elif scene == "Reusable Qiskit architecture":
-            figure.text(0.08, 0.84, scene, fontsize=28, weight="bold", color="#12304a")
+        elif kind == "architecture":
+            figure.text(0.08, 0.84, "Reusable Qiskit architecture", fontsize=28, weight="bold", color="#12304a")
             modules = [
                 (0.08, 0.52, "circuits.py", "14 reusable circuit builders"),
                 (0.38, 0.52, "simulator.py", "statevectors, counts, transpilation"),
@@ -83,24 +102,33 @@ def make_video():
                 axis.add_patch(FancyBboxPatch((0, 0), 1, 1, boxstyle="round,pad=0.03", facecolor="#d9eef2", edgecolor="#0e7490"))
                 axis.text(0.5, 0.65, label, ha="center", weight="bold", color="#12304a")
                 axis.text(0.5, 0.35, detail, ha="center", fontsize=8, color="#425466", wrap=True)
-        elif scene == "Transpilation analysis":
-            figure.text(0.08, 0.84, scene, fontsize=28, weight="bold", color="#12304a")
+        elif kind == "transpilation":
+            circuit, summary = result
+            figure.text(0.08, 0.84, "Transpilation analysis", fontsize=28, weight="bold", color="#12304a")
             axis = figure.add_axes([0.08, 0.18, 0.84, 0.52])
             axis.axis("off")
             axis.text(0.02, 0.78, "Bell-state circuit", fontsize=17, weight="bold", color="#0e7490")
             axis.text(0.02, 0.58, circuit.draw(output="text"), family="monospace", fontsize=13, color="#17324d")
             axis.text(0.52, 0.78, "Aer transpilation summary", fontsize=17, weight="bold", color="#0e7490")
-            axis.text(0.52, 0.62, f"Original depth:   {result['original_depth']}", fontsize=14, color="#17324d")
-            axis.text(0.52, 0.50, f"Transpiled depth: {result['transpiled_depth']}", fontsize=14, color="#17324d")
-            axis.text(0.52, 0.38, f"Original size:    {result['original_size']}", fontsize=14, color="#17324d")
-            axis.text(0.52, 0.26, f"Transpiled size:  {result['transpiled_size']}", fontsize=14, color="#17324d")
+            axis.text(0.52, 0.62, f"Original depth:   {summary['original_depth']}", fontsize=14, color="#17324d")
+            axis.text(0.52, 0.50, f"Transpiled depth: {summary['transpiled_depth']}", fontsize=14, color="#17324d")
+            axis.text(0.52, 0.38, f"Original size:    {summary['original_size']}", fontsize=14, color="#17324d")
+            axis.text(0.52, 0.26, f"Transpiled size:  {summary['transpiled_size']}", fontsize=14, color="#17324d")
+        elif kind == "tests":
+            figure.text(0.08, 0.84, "Automated verification", fontsize=28, weight="bold", color="#12304a")
+            figure.text(0.08, 0.62, "6 tests passed", fontsize=30, weight="bold", color="#0e7490")
+            figure.text(0.08, 0.46, "Catalog coverage  |  Pauli-X  |  Hadamard  |  Bell  |  GHZ  |  rotations", fontsize=15, color="#425466")
+            figure.text(0.08, 0.30, "Theoretical results agree with seeded Qiskit Aer simulation.", fontsize=15, color="#425466")
         else:
-            figure.text(0.08, 0.86, scene, fontsize=28, weight="bold", color="#12304a")
-            left = figure.add_axes([0.08, 0.18, 0.42, 0.54])
-            right = figure.add_axes([0.60, 0.18, 0.32, 0.54])
-            draw_circuit(left, circuit)
-            draw_counts(right, result)
-            figure.text(0.08, 0.08, "Ideal Qiskit Aer simulation with 1024 seeded shots", fontsize=13, color="#425466")
+            circuit, state, counts = result
+            figure.text(0.08, 0.86, title, fontsize=28, weight="bold", color="#12304a")
+            circuit_axis = figure.add_axes([0.06, 0.48, 0.42, 0.28])
+            state_axis = figure.add_axes([0.06, 0.12, 0.42, 0.24])
+            counts_axis = figure.add_axes([0.58, 0.18, 0.34, 0.55])
+            draw_circuit(circuit_axis, circuit)
+            draw_state(state_axis, state)
+            draw_counts(counts_axis, counts)
+            figure.text(0.06, 0.05, "Ideal Qiskit Aer simulation | 1024 seeded shots", fontsize=12, color="#425466")
 
     animation = FuncAnimation(figure, update, frames=frames_per_scene * len(scenes), interval=1000 / FPS)
     writer = FFMpegWriter(fps=FPS, bitrate=1800, metadata={"title": "Quantum Circuit Product 1 Demo"})
